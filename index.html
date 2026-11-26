@@ -58,6 +58,11 @@
   th,td{border:1px solid #000;padding:6px;text-align:center}
   th{font-weight:700}
   td.izq{text-align:left}
+  .rangos{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:8px 0 4px}
+  .rango{background:rgba(255,255,255,.1);border:1.5px solid var(--borde);border-radius:20px;padding:10px 6px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:4px}
+  .rnom{font-weight:800;font-size:1rem}
+  .rdes{font-size:.8rem;color:var(--suave);font-variant-numeric:tabular-nums}
+  .rmet{font-size:.72rem;color:var(--suave);line-height:1.25}
   .scroll{overflow-x:auto;border-radius:6px}
   .grid100{display:grid;grid-template-columns:repeat(10,1fr);border:1px solid #000;background:#fff;color:#000}
   .grid100 div{border:1px solid #000;text-align:center;padding:5px 0;font-size:.82rem;font-variant-numeric:tabular-nums}
@@ -423,6 +428,11 @@
     var hf='<h2>🎯 Pronóstico final</h2><p class="explica">'+esc(fin.explica)+'</p>'+
       '<div class="bolas">'+fin.chances.map(function(c){ return '<span class="bola top">'+c+'</span>'; }).join('')+'</div>'+
       '<div>'+fin.billetes.map(function(b){ return '<span class="billete">'+b+'</span>'; }).join('')+'</div>'+
+      '<h3>🎚️ Chance recomendado por rango</h3><div class="rangos">'+fin.rangos.map(function(r){
+        return '<div class="rango"><div class="rnom">'+r.nombre+'</div><div class="rdes">'+r.de+'–'+r.a+'</div>'+
+          (r.c ? '<span class="bola top">'+r.c+'</span><div class="rdes">'+r.v.toFixed(r.v%1?1:0)+' voto'+(r.v===1?'':'s')+'</div><div class="rmet">'+esc(r.f.join(', '))+'</div>'
+               : '<div class="rmet">Ningún método eligió un chance en este rango</div>')+'</div>';
+      }).join('')+'</div>'+
       '<h3>Ranking de votos</h3><div class="scroll"><table><tr><th>#</th><th>Chance</th><th>Votos</th><th>Métodos que lo eligieron</th></tr>'+
       fin.ranking.map(function(r,i){ return '<tr><td>'+(i+1)+'</td><td><b>'+r.c+'</b></td><td>'+r.v.toFixed(r.v%1?1:0)+'</td><td class="izq">'+esc(r.f.join(', '))+'</td></tr>'; }).join('')+
       '</table></div>'+
@@ -470,6 +480,10 @@
       k:'final', nombre:'Pronóstico final (destilado)',
       explica:'Cada método vota por sus chances; ganan los 5 que más métodos repiten. Los billetes unen los dos chances más votados y los 4 dígitos con más votos. El azar puro no vota. Si los métodos no coinciden, el ranking se decide casi al azar.',
       chances: top, billetes: billetes,
+      rangos: [['Bajo',0,31],['Medio',32,49],['Alto',50,99]].map(function(r){
+        var c=null; for(var i=0;i<rank.length;i++){ var n=+rank[i]; if(n>=r[1] && n<=r[2]){ c=rank[i]; break; } }
+        return { nombre:r[0], de:pad(r[1],2), a:pad(r[2],2), c:c, v:c?votos[c]:0, f:c?fuentes[c]:[] };
+      }),
       ranking: rank.slice(0,10).map(function(c){ return {c:c, v:votos[c], f:fuentes[c]}; }),
       pesosTxt: pesos.length ? 'Pesos según su récord en Seguimiento: '+pesos.join(', ')+'.' : ''
     };
