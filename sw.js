@@ -1,5 +1,5 @@
 // Service worker network-first — Pronosticador Lotería PA
-const CACHE = 'loteria-pa-v4';
+const CACHE = 'loteria-pa-v5';
 const ARCHIVOS = ['./', 'index.html', 'manifest.json', 'icon.svg', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', e => {
