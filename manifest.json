@@ -1,0 +1,16 @@
+{
+  "name": "Pronosticador Lotería PA",
+  "short_name": "Lotería PA",
+  "description": "Números jugados y no jugados de la Lotería Nacional de Panamá — por JoséWhite's PanaMentorLabs",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f6fb",
+  "theme_color": "#0b3d91",
+  "lang": "es",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}

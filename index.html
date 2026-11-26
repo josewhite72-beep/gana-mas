@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="author" content="JoséWhite's PanaMentorLabs">
+<meta name="description" content="Análisis de números jugados y no jugados de la Lotería Nacional de Panamá, con métodos populares de pronóstico y seguimiento de aciertos.">
+<meta name="theme-color" content="#0b3d91">
+<title>Pronosticador Lotería PA</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+  :root{
+    --azul:#0b3d91; --rojo:#c8102e; --fondo:#f4f6fb; --tarjeta:#fff; --texto:#1b1f2a; --suave:#5b6475; --borde:#d9deea;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--fondo);color:var(--texto);font-size:16px;line-height:1.45}
+  header{background:var(--azul);color:#fff;padding:14px 16px 10px;position:sticky;top:0;z-index:5}
+  header h1{margin:0;font-size:1.15rem}
+  header small{opacity:.85}
+  nav{display:flex;gap:4px;overflow-x:auto;background:var(--azul);padding:0 8px 8px;position:sticky;top:58px;z-index:5}
+  nav button{flex:0 0 auto;border:0;border-radius:999px;padding:8px 14px;background:rgba(255,255,255,.15);color:#fff;font-weight:600;font-size:.9rem}
+  nav button.activo{background:#fff;color:var(--azul)}
+  main{max-width:760px;margin:0 auto;padding:12px}
+  section.vista{display:none}
+  section.vista.activa{display:block}
+  .tarjeta{background:var(--tarjeta);border:1px solid var(--borde);border-radius:14px;padding:14px;margin-bottom:12px}
+  .tarjeta h2{margin:0 0 8px;font-size:1.05rem;color:var(--azul)}
+  .tarjeta h3{margin:12px 0 6px;font-size:.95rem}
+  .aviso{background:#fff7e6;border:1px solid #f0c36d;border-radius:12px;padding:10px 12px;font-size:.88rem;margin-bottom:12px}
+  label{display:block;font-size:.85rem;color:var(--suave);margin:8px 0 3px}
+  input,select{width:100%;padding:10px;border:1px solid var(--borde);border-radius:10px;font-size:1rem;background:#fff}
+  .fila{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .fila3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+  .btn{display:inline-block;border:0;border-radius:10px;padding:10px 14px;font-weight:700;font-size:.95rem;background:var(--azul);color:#fff;margin:8px 6px 0 0}
+  .btn.sec{background:#e8ecf6;color:var(--azul)}
+  .btn.peligro{background:var(--rojo)}
+  .btn.mini{padding:6px 10px;font-size:.8rem;margin:4px 4px 0 0}
+  /* Tablas: sin colores, bordes negros, fondo blanco */
+  table{width:100%;border-collapse:collapse;background:#fff;font-size:.9rem}
+  th,td{border:1px solid #000;padding:6px;text-align:center}
+  th{font-weight:700}
+  .scroll{overflow-x:auto}
+  .grid100{display:grid;grid-template-columns:repeat(10,1fr);gap:0;border:1px solid #000;background:#fff}
+  .grid100 div{border:1px solid #000;text-align:center;padding:5px 0;font-size:.82rem;font-variant-numeric:tabular-nums}
+  .grid100 div.si{background:#000;color:#fff;font-weight:700}
+  .bolas{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
+  .bola{min-width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;border:2px solid var(--azul);color:var(--azul);background:#fff;font-variant-numeric:tabular-nums;padding:0 6px}
+  .bola.no{border-color:var(--rojo);color:var(--rojo)}
+  .billete{display:inline-block;border:2px dashed var(--azul);border-radius:8px;padding:4px 10px;font-weight:800;letter-spacing:3px;margin:3px 6px 3px 0;font-variant-numeric:tabular-nums}
+  .metodo{border-top:1px solid var(--borde);padding-top:10px;margin-top:10px}
+  .metodo:first-of-type{border-top:0;margin-top:0;padding-top:0}
+  .explica{font-size:.85rem;color:var(--suave);margin:2px 0 4px}
+  .piramide{font-family:ui-monospace,Menlo,Consolas,monospace;text-align:center;font-size:.95rem;letter-spacing:4px;line-height:1.5;margin:6px 0}
+  .vacio{color:var(--suave);font-style:italic}
+  footer{text-align:center;font-size:.8rem;color:var(--suave);padding:18px 12px 30px}
+  .toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#1b1f2a;color:#fff;padding:10px 16px;border-radius:10px;font-size:.9rem;opacity:0;transition:opacity .25s;pointer-events:none;z-index:20}
+  .toast.ver{opacity:1}
+</style>
+</head>
+<body>
+<header>
+  <h1>🎟️ Pronosticador Lotería PA</h1>
+  <small>Números jugados y no jugados del sorteo anterior</small>
+</header>
+<nav id="tabs">
+  <button data-v="resultados" class="activo">Resultados</button>
+  <button data-v="analisis">Análisis</button>
+  <button data-v="pronostico">Pronóstico</button>
+  <button data-v="seguimiento">Seguimiento</button>
+  <button data-v="ajustes">Ajustes</button>
+</nav>
+
+<main>
+  <div class="aviso"><b>Ojo:</b> cada sorteo es independiente; las balotas no recuerdan lo que salió antes. Un billete de 4 cifras tiene 1 en 10,000 de ganar el primer premio y un chance de 2 cifras, 1 en 100. Estos métodos son <b>populares y para entretenimiento</b>; la pestaña <i>Seguimiento</i> compara sus aciertos con el puro azar.</div>
+
+  <!-- RESULTADOS -->
+  <section class="vista activa" id="v-resultados">
+    <div class="tarjeta">
+      <h2>Agregar resultado de sorteo</h2>
+      <form id="formSorteo" autocomplete="off">
+        <div class="fila">
+          <div><label>Fecha</label><input type="date" id="fFecha" required></div>
+          <div><label>Tipo de sorteo</label>
+            <select id="fTipo">
+              <option>Miercolito</option><option>Dominical</option><option>Gordito del Zodiaco</option><option>Extraordinario</option>
+            </select></div>
+        </div>
+        <div class="fila">
+          <div><label>1er premio</label><input id="fP1" inputmode="numeric" placeholder="ej. 5903" required></div>
+          <div><label>Letras</label><input id="fLetras" placeholder="ej. ABDB" maxlength="5" style="text-transform:uppercase"></div>
+        </div>
+        <div class="fila">
+          <div><label>Serie</label><input id="fSerie" inputmode="numeric"></div>
+          <div><label>Folio</label><input id="fFolio" inputmode="numeric"></div>
+        </div>
+        <div class="fila">
+          <div><label>2do premio</label><input id="fP2" inputmode="numeric" placeholder="ej. 4213" required></div>
+          <div><label>3er premio</label><input id="fP3" inputmode="numeric" placeholder="ej. 1681" required></div>
+        </div>
+        <button class="btn" type="submit">Guardar sorteo</button>
+      </form>
+    </div>
+    <div class="tarjeta">
+      <h2>Sorteos guardados</h2>
+      <div id="listaSorteos"></div>
+    </div>
+  </section>
+
+  <!-- ANÁLISIS -->
+  <section class="vista" id="v-analisis">
+    <div class="tarjeta">
+      <h2>Sorteo base</h2>
+      <select id="selBase"></select>
+      <div id="resumenBase"></div>
+    </div>
+    <div class="tarjeta">
+      <h2>Dígitos (0–9)</h2>
+      <div id="tablaDigitos"></div>
+      <h3>Jugados</h3><div class="bolas" id="digJug"></div>
+      <h3>No jugados</h3><div class="bolas" id="digNo"></div>
+    </div>
+    <div class="tarjeta">
+      <h2>Chances 00–99</h2>
+      <p class="explica">En negro, las dos últimas cifras (chance) que salieron en 1º, 2º y 3º premio. El resto son los "no jugados".</p>
+      <div class="grid100" id="grid100"></div>
+    </div>
+    <div class="tarjeta">
+      <h2>Historial de chances</h2>
+      <div id="historial"></div>
+    </div>
+  </section>
+
+  <!-- PRONÓSTICO -->
+  <section class="vista" id="v-pronostico">
+    <div class="tarjeta">
+      <h2>Próximo sorteo</h2>
+      <div class="fila">
+        <div><label>Fecha del próximo sorteo</label><input type="date" id="fProx"></div>
+        <div><label>Basado en</label><input id="baseTxt" disabled></div>
+      </div>
+    </div>
+    <div class="tarjeta" id="metodos"></div>
+  </section>
+
+  <!-- SEGUIMIENTO -->
+  <section class="vista" id="v-seguimiento">
+    <div class="tarjeta">
+      <h2>¿Qué tan bien le fue a cada método?</h2>
+      <p class="explica">Cuando guardas un pronóstico y luego registras el sorteo siguiente, aquí se cuentan los chances que acertaron alguno de los 3 premios. "Esperado al azar" es lo que acertarías escogiendo números al azar.</p>
+      <div id="tablaSeg"></div>
+    </div>
+    <div class="tarjeta">
+      <h2>Pronósticos guardados</h2>
+      <div id="listaPreds"></div>
+    </div>
+  </section>
+
+  <!-- AJUSTES -->
+  <section class="vista" id="v-ajustes">
+    <div class="tarjeta">
+      <h2>Datos</h2>
+      <button class="btn sec" id="btnEjemplos">Cargar sorteos de ejemplo</button>
+      <button class="btn sec" id="btnExport">Exportar respaldo (JSON)</button>
+      <label class="btn sec" style="display:inline-block;color:var(--azul);margin:8px 6px 0 0">Importar respaldo<input type="file" id="fImport" accept=".json,application/json" hidden></label>
+      <br><button class="btn peligro" id="btnBorrar">Borrar todo</button>
+    </div>
+    <div class="tarjeta">
+      <h2>App</h2>
+      <button class="btn sec" id="btnCache">Limpiar caché y recargar</button>
+      <p class="explica">Úsalo si no ves la última versión después de una actualización.</p>
+    </div>
+  </section>
+</main>
+
+<footer>Hecho por JoséWhite's PanaMentorLabs · Juega con responsabilidad</footer>
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  'use strict';
+  var LS_D = 'lotpa_sorteos', LS_P = 'lotpa_pronosticos';
+  var sorteos = leer(LS_D), preds = leer(LS_P);
+  var baseId = null;
+
+  function leer(k){ try{ return JSON.parse(localStorage.getItem(k)) || []; }catch(e){ return []; } }
+  function guardar(){ try{ localStorage.setItem(LS_D, JSON.stringify(sorteos)); localStorage.setItem(LS_P, JSON.stringify(preds)); }catch(e){ toast('No se pudo guardar'); } }
+  function $(id){ return document.getElementById(id); }
+  function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+  function pad(n,l){ return String(n).padStart(l,'0'); }
+  function u2(s){ return String(s).slice(-2); }
+  function uniq(a){ var v={}, r=[]; a.forEach(function(x){ if(!v[x]){ v[x]=1; r.push(x);} }); return r; }
+  function toast(m){ var t=$('toast'); t.textContent=m; t.classList.add('ver'); clearTimeout(toast._t); toast._t=setTimeout(function(){ t.classList.remove('ver'); },2200); }
+  function fechaTxt(f){ var p=f.split('-'); return p[2]+'/'+p[1]+'/'+p[0]; }
+  function ordenados(){ return sorteos.slice().sort(function(a,b){ return b.fecha.localeCompare(a.fecha) || (b.creado-a.creado); }); }
+  function porId(id){ for(var i=0;i<sorteos.length;i++) if(sorteos[i].id===id) return sorteos[i]; return null; }
+  function premios(d){ return [d.p1,d.p2,d.p3].filter(Boolean); }
+
+  // RNG con semilla (resultados estables al recargar)
+  function hash(s){ var h=2166136261; for(var i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619); } return h>>>0; }
+  function rng(seed){ var a=hash(seed); return function(){ a|=0; a=a+0x6D2B79F5|0; var t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+  function barajar(arr,r){ var a=arr.slice(); for(var i=a.length-1;i>0;i--){ var j=Math.floor(r()*(i+1)); var t=a[i]; a[i]=a[j]; a[j]=t; } return a; }
+
+  // ---------- Pestañas ----------
+  $('tabs').addEventListener('click', function(e){
+    var b=e.target.closest('button'); if(!b) return;
+    document.querySelectorAll('#tabs button').forEach(function(x){ x.classList.toggle('activo', x===b); });
+    document.querySelectorAll('.vista').forEach(function(s){ s.classList.toggle('activa', s.id==='v-'+b.dataset.v); });
+    window.scrollTo(0,0);
+  });
+
+  // ---------- Resultados ----------
+  $('fFecha').value = new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,10);
+  $('formSorteo').addEventListener('submit', function(e){
+    e.preventDefault();
+    var d = {
+      id: 's'+Date.now().toString(36), creado: Date.now(),
+      fecha: $('fFecha').value, tipo: $('fTipo').value,
+      p1: $('fP1').value.trim(), letras: $('fLetras').value.trim().toUpperCase(),
+      serie: $('fSerie').value.trim(), folio: $('fFolio').value.trim(),
+      p2: $('fP2').value.trim(), p3: $('fP3').value.trim()
+    };
+    var ok = /^\d{2,5}$/;
+    if(!d.fecha){ toast('Falta la fecha'); return; }
+    if(!ok.test(d.p1)||!ok.test(d.p2)||!ok.test(d.p3)){ toast('Los premios deben ser de 2 a 5 cifras'); return; }
+    if(d.letras && !/^[A-D]{4,5}$/.test(d.letras)){ toast('Letras: solo A, B, C o D'); return; }
+    if(sorteos.some(function(s){ return s.fecha===d.fecha && s.tipo===d.tipo; }) && !confirmar('Ya hay un '+d.tipo+' en esa fecha. ¿Guardar otro?')) return;
+    sorteos.push(d); guardar(); baseId = ordenados()[0].id;
+    ['fP1','fLetras','fSerie','fFolio','fP2','fP3'].forEach(function(id){ $(id).value=''; });
+    toast('Sorteo guardado'); render();
+  });
+  function confirmar(m){ return window.confirm(m); }
+
+  function renderLista(){
+    var L = ordenados();
+    if(!L.length){ $('listaSorteos').innerHTML='<p class="vacio">Aún no hay sorteos. Agrega el último resultado o carga los ejemplos en Ajustes.</p>'; return; }
+    var h='<div class="scroll"><table><tr><th>Fecha</th><th>Tipo</th><th>1º</th><th>Letras</th><th>S/F</th><th>2º</th><th>3º</th><th></th></tr>';
+    L.forEach(function(d){
+      h+='<tr><td>'+fechaTxt(d.fecha)+'</td><td>'+esc(d.tipo)+'</td><td><b>'+esc(d.p1)+'</b></td><td>'+esc(d.letras||'—')+'</td><td>'+esc((d.serie||'–')+'/'+(d.folio||'–'))+'</td><td>'+esc(d.p2)+'</td><td>'+esc(d.p3)+'</td><td><button class="btn mini peligro" data-del="'+d.id+'">✕</button></td></tr>';
+    });
+    $('listaSorteos').innerHTML = h+'</table></div>';
+  }
+  $('listaSorteos').addEventListener('click', function(e){
+    var b=e.target.closest('[data-del]'); if(!b) return;
+    if(!confirmar('¿Borrar este sorteo?')) return;
+    sorteos = sorteos.filter(function(s){ return s.id!==b.dataset.del; });
+    if(baseId===b.dataset.del) baseId=null;
+    guardar(); render();
+  });
+
+  // ---------- Análisis ----------
+  function analizar(d){
+    var cifras = premios(d).join('').split('').map(Number);
+    var cuenta = [0,0,0,0,0,0,0,0,0,0];
+    cifras.forEach(function(c){ cuenta[c]++; });
+    var jug=[], no=[];
+    for(var i=0;i<10;i++) (cuenta[i]?jug:no).push(i);
+    return { cuenta:cuenta, jug:jug, no:no, chances: premios(d).map(u2) };
+  }
+
+  function renderAnalisis(){
+    var L = ordenados(), sel=$('selBase');
+    if(!L.length){
+      sel.innerHTML=''; $('resumenBase').innerHTML='<p class="vacio">Agrega al menos un sorteo.</p>';
+      ['tablaDigitos','digJug','digNo','grid100','historial'].forEach(function(id){ $(id).innerHTML=''; });
+      return;
+    }
+    if(!baseId || !porId(baseId)) baseId = L[0].id;
+    sel.innerHTML = L.map(function(d){ return '<option value="'+d.id+'"'+(d.id===baseId?' selected':'')+'>'+fechaTxt(d.fecha)+' · '+esc(d.tipo)+' · '+esc(d.p1)+'</option>'; }).join('');
+    var d = porId(baseId), A = analizar(d);
+    $('resumenBase').innerHTML = '<p>1º <span class="billete">'+esc(d.p1)+'</span> 2º <span class="billete">'+esc(d.p2)+'</span> 3º <span class="billete">'+esc(d.p3)+'</span></p>';
+    var t='<div class="scroll"><table><tr><th>Dígito</th>'; for(var i=0;i<10;i++) t+='<th>'+i+'</th>'; t+='</tr><tr><td>Veces</td>';
+    for(i=0;i<10;i++) t+='<td>'+(A.cuenta[i]||'—')+'</td>';
+    $('tablaDigitos').innerHTML = t+'</tr></table></div>';
+    $('digJug').innerHTML = A.jug.map(function(n){ return '<span class="bola">'+n+'</span>'; }).join('') || '<span class="vacio">—</span>';
+    $('digNo').innerHTML = A.no.map(function(n){ return '<span class="bola no">'+n+'</span>'; }).join('') || '<span class="vacio">Salieron todos los dígitos</span>';
+    var g=''; for(i=0;i<100;i++){ var c=pad(i,2); g+='<div class="'+(A.chances.indexOf(c)>=0?'si':'')+'">'+c+'</div>'; }
+    $('grid100').innerHTML = g;
+    var h='<div class="scroll"><table><tr><th>Fecha</th><th>Chance 1º</th><th>Chance 2º</th><th>Chance 3º</th></tr>';
+    L.slice(0,15).forEach(function(s){ h+='<tr><td>'+fechaTxt(s.fecha)+'</td><td>'+u2(s.p1)+'</td><td>'+u2(s.p2)+'</td><td>'+u2(s.p3)+'</td></tr>'; });
+    $('historial').innerHTML = h+'</table></div>';
+  }
+  $('selBase').addEventListener('change', function(){ baseId=this.value; render(); });
+
+  // ---------- Métodos de pronóstico ----------
+  function piramide(digs){
+    var filas=[digs.slice()];
+    while(filas[filas.length-1].length>2){
+      var f=filas[filas.length-1], n=[];
+      for(var i=0;i<f.length-1;i++) n.push((f[i]+f[i+1])%10);
+      filas.push(n);
+    }
+    return filas;
+  }
+  function paresDe(filas, cuantas){
+    var r=[]; filas.slice(-cuantas).forEach(function(f){ for(var i=0;i<f.length-1;i++) r.push(''+f[i]+f[i+1]); });
+    return uniq(r);
+  }
+  function billetesDesde(set, n, r){
+    var out=[]; if(!set.length) return out;
+    for(var k=0;k<n;k++){ var b=''; for(var i=0;i<4;i++) b+=set[Math.floor(r()*set.length)]; out.push(b); }
+    return uniq(out);
+  }
+
+  function metodos(d, fechaProx){
+    var A = analizar(d), out=[];
+    var r = function(k){ return rng(d.id+'|'+k); };
+
+    // 1. No jugados
+    var base1 = A.no.length>=2 ? A.no : A.cuenta.map(function(c,i){ return {c:c,i:i}; }).sort(function(a,b){ return a.c-b.c; }).slice(0,3).map(function(x){ return x.i; });
+    var pares1=[]; base1.forEach(function(a){ base1.forEach(function(b){ pares1.push(''+a+b); }); });
+    out.push({ k:'nojugados', nombre:'Dígitos no jugados',
+      explica:'Combina los dígitos que NO salieron en el sorteo anterior ('+base1.join(', ')+'). Idea popular: "ya les toca".',
+      chances: barajar(pares1, r('nj')).slice(0,8), billetes: billetesDesde(base1,3,r('njb')) });
+
+    // 2. Jugados (arrastre)
+    var pares2=[]; A.jug.forEach(function(a){ A.jug.forEach(function(b){ pares2.push(''+a+b); }); });
+    out.push({ k:'jugados', nombre:'Dígitos jugados (arrastre)',
+      explica:'Lo contrario: repite dígitos que sí salieron ('+A.jug.join(', ')+'), con la idea de que "vienen calientes".',
+      chances: barajar(pares2, r('j')).slice(0,8), billetes: billetesDesde(A.jug,3,r('jb')) });
+
+    // 3. Mezcla
+    var pares3=[]; A.jug.forEach(function(a){ A.no.forEach(function(b){ pares3.push(''+a+b, ''+b+a); }); });
+    out.push({ k:'mezcla', nombre:'Mezcla jugado + no jugado',
+      explica:'Cada chance lleva una cifra que salió y otra que no salió.',
+      chances: barajar(uniq(pares3), r('m')).slice(0,8), billetes: [] });
+
+    // 4. Volteo
+    var volt = uniq(A.chances.map(function(c){ return c[1]+c[0]; }));
+    out.push({ k:'volteo', nombre:'Volteados',
+      explica:'Invierte las cifras de lo que salió (ej. 03 → 30). Muy usado en Panamá.',
+      chances: volt, billetes: uniq(premios(d).map(function(p){ return p.split('').reverse().join(''); })) });
+
+    // 5. Complemento (9 − cifra)
+    function comp(s){ return s.split('').map(function(c){ return 9-Number(c); }).join(''); }
+    out.push({ k:'complemento', nombre:'Complemento a 9',
+      explica:'Cambia cada cifra por la que le falta para llegar a 9 (0↔9, 1↔8, 2↔7, 3↔6, 4↔5).',
+      chances: uniq(A.chances.map(comp)), billetes: uniq(premios(d).map(comp)) });
+
+    // 6. Pirámide del resultado
+    var digsRes = premios(d).join('').split('').map(Number);
+    var pirR = piramide(digsRes);
+    out.push({ k:'piramideRes', nombre:'Pirámide del resultado',
+      explica:'Pone en fila las cifras de los 3 premios y suma vecinos (quedándose con la última cifra) hasta llegar a 2. Se toman los pares de las 3 filas finales.',
+      piramide: pirR, chances: paresDe(pirR,3).slice(0,8), billetes: [] });
+
+    // 7. Pirámide de la fecha
+    if(fechaProx){
+      var p=fechaProx.split('-'); var digsF=(p[2]+p[1]+p[0]).split('').map(Number);
+      var pirF = piramide(digsF);
+      out.push({ k:'piramideFecha', nombre:'Pirámide de la fecha',
+        explica:'Igual, pero arrancando con la fecha del próximo sorteo (DDMMAAAA).',
+        piramide: pirF, chances: paresDe(pirF,3).slice(0,8), billetes: [] });
+    }
+
+    // 8. Calientes / atrasados (historial)
+    var L = ordenados().filter(function(s){ return s.fecha<=d.fecha; });
+    if(L.length>=5){
+      var cnt={}, ult={};
+      L.forEach(function(s,idx){ premios(s).forEach(function(x){ var c=u2(x); cnt[c]=(cnt[c]||0)+1; if(ult[c]==null) ult[c]=idx; }); });
+      var cal = Object.keys(cnt).sort(function(a,b){ return cnt[b]-cnt[a] || ult[a]-ult[b]; }).slice(0,4);
+      var nunca=[]; for(var i=0;i<100;i++){ var c=pad(i,2); if(!cnt[c]) nunca.push(c); }
+      var atr = barajar(nunca, r('atr')).slice(0,4);
+      out.push({ k:'historial', nombre:'Calientes y atrasados',
+        explica:'De tus '+L.length+' sorteos guardados: los 4 chances que más han salido + 4 que no han salido nunca. Con pocos sorteos esto dice muy poco.',
+        chances: uniq(cal.concat(atr)), billetes: [] });
+    }
+
+    // 9. Azar (control)
+    var todos=[]; for(var j=0;j<100;j++) todos.push(pad(j,2));
+    var rz=r('azar'), bz=[]; for(j=0;j<3;j++) bz.push(pad(Math.floor(rz()*10000),4));
+    out.push({ k:'azar', nombre:'Azar puro (grupo de control)',
+      explica:'8 chances escogidos al azar. Sirve para comparar en Seguimiento: si un método no le gana a este, no sirve.',
+      chances: barajar(todos, r('az')).slice(0,8), billetes: bz });
+
+    return out;
+  }
+
+  function proximaFecha(desde){
+    // próximo miércoles o domingo después de la fecha dada
+    var f = new Date(desde+'T12:00:00');
+    do{ f.setDate(f.getDate()+1); }while(f.getDay()!==3 && f.getDay()!==0);
+    return f.toISOString().slice(0,10);
+  }
+
+  var cacheMetodos=[];
+  function renderPronostico(){
+    var L=ordenados();
+    if(!L.length){ $('metodos').innerHTML='<p class="vacio">Agrega al menos un sorteo.</p>'; $('baseTxt').value=''; return; }
+    var d = porId(baseId) || L[0];
+    if(!$('fProx').value || $('fProx').dataset.base!==d.id){ $('fProx').value = proximaFecha(d.fecha); $('fProx').dataset.base=d.id; }
+    $('baseTxt').value = fechaTxt(d.fecha)+' · '+d.tipo;
+    cacheMetodos = metodos(d, $('fProx').value);
+    var h='<h2>Pronósticos por método</h2>';
+    cacheMetodos.forEach(function(m,i){
+      h+='<div class="metodo"><h3>'+esc(m.nombre)+'</h3><p class="explica">'+esc(m.explica)+'</p>';
+      if(m.piramide) h+='<div class="piramide">'+m.piramide.map(function(f){ return f.join(''); }).join('<br>')+'</div>';
+      h+='<div class="bolas">'+m.chances.map(function(c){ return '<span class="bola">'+c+'</span>'; }).join('')+'</div>';
+      if(m.billetes.length) h+='<div>'+m.billetes.map(function(b){ return '<span class="billete">'+b+'</span>'; }).join('')+'</div>';
+      h+='<button class="btn mini sec" data-guardar="'+i+'">Guardar para seguimiento</button></div>';
+    });
+    $('metodos').innerHTML=h;
+  }
+  $('fProx').addEventListener('change', renderPronostico);
+  $('metodos').addEventListener('click', function(e){
+    var b=e.target.closest('[data-guardar]'); if(!b) return;
+    var m=cacheMetodos[+b.dataset.guardar], d=porId(baseId)||ordenados()[0];
+    preds = preds.filter(function(p){ return !(p.baseId===d.id && p.k===m.k); });
+    preds.push({ id:'p'+Date.now().toString(36), baseId:d.id, baseFecha:d.fecha, k:m.k, nombre:m.nombre, chances:m.chances.slice(), billetes:m.billetes.slice(), creado:Date.now() });
+    guardar(); renderSeguimiento(); toast('Guardado: '+m.nombre);
+  });
+
+  // ---------- Seguimiento ----------
+  function siguienteDe(fecha){
+    var c = sorteos.filter(function(s){ return s.fecha>fecha; }).sort(function(a,b){ return a.fecha.localeCompare(b.fecha); });
+    return c[0]||null;
+  }
+  function renderSeguimiento(){
+    if(!preds.length){ $('tablaSeg').innerHTML='<p class="vacio">Guarda pronósticos en la pestaña Pronóstico y, cuando salga el siguiente sorteo, regístralo.</p>'; $('listaPreds').innerHTML=''; return; }
+    var agg={}, lista='<div class="scroll"><table><tr><th>Basado en</th><th>Método</th><th>Chances</th><th>Siguiente sorteo</th><th>Aciertos</th><th></th></tr>';
+    preds.slice().sort(function(a,b){ return b.creado-a.creado; }).forEach(function(p){
+      var sig = siguienteDe(p.baseFecha), txtSig='pendiente', ac='—';
+      if(sig){
+        var ch = premios(sig).map(u2), hits=0, detalle=[];
+        p.chances.forEach(function(c){ ch.forEach(function(x,i){ if(c===x){ hits++; detalle.push(c+' ('+(i+1)+'º)'); } }); });
+        var bh = p.billetes.filter(function(b){ return premios(sig).indexOf(b)>=0; });
+        txtSig = fechaTxt(sig.fecha)+': '+ch.join(' · ');
+        ac = hits ? detalle.join(', ') : '0';
+        if(bh.length) ac += ' · ¡billete '+bh.join(', ')+'!';
+        var a = agg[p.k] || (agg[p.k]={nombre:p.nombre, n:0, apuestas:0, hits:0, esperado:0});
+        a.n++; a.apuestas+=p.chances.length; a.hits+=hits; a.esperado+=p.chances.length*ch.length/100;
+      }
+      lista+='<tr><td>'+fechaTxt(p.baseFecha)+'</td><td>'+esc(p.nombre)+'</td><td>'+p.chances.join(' ')+'</td><td>'+esc(txtSig)+'</td><td>'+esc(ac)+'</td><td><button class="btn mini peligro" data-delp="'+p.id+'">✕</button></td></tr>';
+    });
+    $('listaPreds').innerHTML = lista+'</table></div>';
+    var ks=Object.keys(agg);
+    if(!ks.length){ $('tablaSeg').innerHTML='<p class="vacio">Todavía no hay sorteos siguientes para evaluar. Registra el próximo resultado.</p>'; return; }
+    var t='<div class="scroll"><table><tr><th>Método</th><th>Sorteos evaluados</th><th>Chances jugados</th><th>Aciertos</th><th>Esperado al azar</th></tr>';
+    ks.sort(function(a,b){ return agg[b].hits-agg[a].hits; }).forEach(function(k){
+      var a=agg[k]; t+='<tr><td>'+esc(a.nombre)+'</td><td>'+a.n+'</td><td>'+a.apuestas+'</td><td><b>'+a.hits+'</b></td><td>'+a.esperado.toFixed(2)+'</td></tr>';
+    });
+    $('tablaSeg').innerHTML = t+'</table></div><p class="explica">Con pocos sorteos las diferencias son pura suerte. Necesitas decenas de sorteos para que la comparación diga algo.</p>';
+  }
+  $('listaPreds').addEventListener('click', function(e){
+    var b=e.target.closest('[data-delp]'); if(!b) return;
+    preds = preds.filter(function(p){ return p.id!==b.dataset.delp; }); guardar(); renderSeguimiento();
+  });
+
+  // ---------- Ajustes ----------
+  var EJEMPLOS = [ // Resultados publicados por Telemetro (no son sorteos consecutivos)
+    ['2026-11-11','Miercolito','5903','ABDB','16','9','4213','1681'],
+    ['2026-10-21','Miercolito','2948','ABAD','22','9','8729','9384'],
+    ['2026-10-07','Miercolito','2823','DBCC','15','11','2161','0984'],
+    ['2026-09-23','Miercolito','5323','CBCA','12','8','5166','8107'],
+    ['2026-09-02','Miercolito','9959','AABC','2','15','0783','5777'],
+    ['2026-08-12','Miercolito','0909','CAAB','10','6','1144','9655'],
+    ['2026-08-02','Dominical','8479','DBAB','7','2','3611','0304'],
+    ['2026-04-26','Dominical','5144','BABD','6','13','2104','1579']
+  ];
+  $('btnEjemplos').addEventListener('click', function(){
+    var n=0;
+    EJEMPLOS.forEach(function(e,i){
+      if(sorteos.some(function(s){ return s.fecha===e[0] && s.tipo===e[1]; })) return;
+      sorteos.push({ id:'e'+i+Date.now().toString(36), creado:Date.now()+i, fecha:e[0], tipo:e[1], p1:e[2], letras:e[3], serie:e[4], folio:e[5], p2:e[6], p3:e[7] }); n++;
+    });
+    guardar(); baseId=null; render(); toast(n ? n+' sorteos agregados' : 'Ya estaban cargados');
+  });
+  $('btnExport').addEventListener('click', function(){
+    var blob=new Blob([JSON.stringify({app:'loteria-pa',version:1,sorteos:sorteos,pronosticos:preds},null,2)],{type:'application/json'});
+    var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='loteria-pa-respaldo.json'; a.click();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); },1000);
+  });
+  $('fImport').addEventListener('change', function(){
+    var f=this.files[0]; if(!f) return;
+    var rd=new FileReader();
+    rd.onload=function(){
+      try{
+        var j=JSON.parse(rd.result);
+        if(!Array.isArray(j.sorteos)) throw 0;
+        sorteos=j.sorteos.filter(function(s){ return s && /^\d{4}-\d{2}-\d{2}$/.test(s.fecha) && /^\d{2,5}$/.test(s.p1); });
+        preds=Array.isArray(j.pronosticos)?j.pronosticos:[];
+        guardar(); baseId=null; render(); toast('Respaldo importado');
+      }catch(e){ toast('Archivo no válido'); }
+    };
+    rd.readAsText(f); this.value='';
+  });
+  $('btnBorrar').addEventListener('click', function(){
+    if(!confirmar('¿Borrar todos los sorteos y pronósticos?')) return;
+    sorteos=[]; preds=[]; baseId=null; guardar(); render();
+  });
+  $('btnCache').addEventListener('click', function(){
+    var tareas=[];
+    if('caches' in window) tareas.push(caches.keys().then(function(ks){ return Promise.all(ks.map(function(k){ return caches.delete(k); })); }));
+    if('serviceWorker' in navigator) tareas.push(navigator.serviceWorker.getRegistrations().then(function(rs){ return Promise.all(rs.map(function(r){ return r.unregister(); })); }));
+    Promise.all(tareas).then(function(){ location.reload(); });
+  });
+
+  function render(){ renderLista(); renderAnalisis(); renderPronostico(); renderSeguimiento(); }
+  render();
+
+  if('serviceWorker' in navigator && location.protocol.indexOf('http')===0){
+    navigator.serviceWorker.register('sw.js').catch(function(){});
+  }
+})();
+</script>
+</body>
+</html>
