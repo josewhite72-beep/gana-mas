@@ -55,6 +55,9 @@
   .piramide{font-family:ui-monospace,Menlo,Consolas,monospace;text-align:center;font-size:.95rem;letter-spacing:4px;line-height:1.5;margin:6px 0}
   .vacio{color:var(--suave);font-style:italic}
   footer{text-align:center;font-size:.8rem;color:var(--suave);padding:18px 12px 30px}
+  .tarjeta.final{border:2px solid var(--azul)}
+  .bola.top{background:var(--azul);color:#fff;width:52px;height:52px;font-size:1.2rem}
+  td.izq{text-align:left}
   .toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#1b1f2a;color:#fff;padding:10px 16px;border-radius:10px;font-size:.9rem;opacity:0;transition:opacity .25s;pointer-events:none;z-index:20}
   .toast.ver{opacity:1}
 </style>
@@ -141,6 +144,7 @@
         <div><label>Basado en</label><input id="baseTxt" disabled></div>
       </div>
     </div>
+    <div class="tarjeta final" id="final"></div>
     <div class="tarjeta" id="metodos"></div>
   </section>
 
@@ -387,13 +391,26 @@
   var cacheMetodos=[];
   function renderPronostico(){
     var L=ordenados();
-    if(!L.length){ $('metodos').innerHTML='<p class="vacio">Agrega al menos un sorteo.</p>'; $('baseTxt').value=''; return; }
+    if(!L.length){ $('metodos').innerHTML='<p class="vacio">Agrega al menos un sorteo.</p>'; $('final').innerHTML=''; $('baseTxt').value=''; return; }
     var d = porId(baseId) || L[0];
     if(!$('fProx').value || $('fProx').dataset.base!==d.id){ $('fProx').value = proximaFecha(d.fecha); $('fProx').dataset.base=d.id; }
     $('baseTxt').value = fechaTxt(d.fecha)+' · '+d.tipo;
     cacheMetodos = metodos(d, $('fProx').value);
+    var fin = destilar(cacheMetodos, d);
+    cacheMetodos.push(fin);
+    var fi = cacheMetodos.length-1;
+    var hf='<h2>🎯 Pronóstico final</h2><p class="explica">'+esc(fin.explica)+'</p>'+
+      '<div class="bolas">'+fin.chances.map(function(c){ return '<span class="bola top">'+c+'</span>'; }).join('')+'</div>'+
+      '<div>'+fin.billetes.map(function(b){ return '<span class="billete">'+b+'</span>'; }).join('')+'</div>'+
+      '<h3>Ranking de votos</h3><div class="scroll"><table><tr><th>#</th><th>Chance</th><th>Votos</th><th>Métodos que lo eligieron</th></tr>'+
+      fin.ranking.map(function(r,i){ return '<tr><td>'+(i+1)+'</td><td><b>'+r.c+'</b></td><td>'+r.v.toFixed(r.v%1?1:0)+'</td><td class="izq">'+esc(r.f.join(', '))+'</td></tr>'; }).join('')+
+      '</table></div>'+
+      (fin.pesosTxt ? '<p class="explica">'+esc(fin.pesosTxt)+'</p>' : '')+
+      '<button class="btn mini" data-guardar="'+fi+'">Guardar pronóstico final para seguimiento</button>';
+    $('final').innerHTML = hf;
     var h='<h2>Pronósticos por método</h2>';
     cacheMetodos.forEach(function(m,i){
+      if(i===fi) return;
       h+='<div class="metodo"><h3>'+esc(m.nombre)+'</h3><p class="explica">'+esc(m.explica)+'</p>';
       if(m.piramide) h+='<div class="piramide">'+m.piramide.map(function(f){ return f.join(''); }).join('<br>')+'</div>';
       h+='<div class="bolas">'+m.chances.map(function(c){ return '<span class="bola">'+c+'</span>'; }).join('')+'</div>';
@@ -402,34 +419,81 @@
     });
     $('metodos').innerHTML=h;
   }
+  // ---------- Destilado: votación entre métodos ----------
+  function destilar(ms, d){
+    var agg = rendimiento(), votos={}, fuentes={}, pesos=[];
+    var desempate = rng(d.id+'|final'), azarOrden={};
+    for(var i=0;i<100;i++) azarOrden[pad(i,2)] = desempate();
+    ms.forEach(function(m){
+      if(m.k==='azar') return; // el grupo de control no vota
+      var w=1, a=agg[m.k];
+      if(a && a.n>=3){ // con historial suficiente, pesa según su récord frente al azar
+        w = Math.min(2, Math.max(0.5, (a.hits+1)/(a.esperado+1)));
+        pesos.push(m.nombre+' ×'+w.toFixed(1));
+      }
+      uniq(m.chances).forEach(function(c){
+        votos[c]=(votos[c]||0)+w;
+        (fuentes[c]=fuentes[c]||[]).push(m.nombre);
+      });
+    });
+    var rank = Object.keys(votos).sort(function(a,b){
+      return votos[b]-votos[a] || fuentes[b].length-fuentes[a].length || azarOrden[a]-azarOrden[b];
+    });
+    var top = rank.slice(0,5);
+    // votos por dígito (de los chances, ponderados) para armar un billete de consenso
+    var dv=[0,0,0,0,0,0,0,0,0,0];
+    rank.forEach(function(c){ dv[+c[0]]+=votos[c]; dv[+c[1]]+=votos[c]; });
+    var digTop = dv.map(function(v,i){ return {v:v,i:i}; }).sort(function(a,b){ return b.v-a.v || a.i-b.i; }).slice(0,4).map(function(x){ return x.i; }).join('');
+    var billetes = uniq([ (top[0]||'')+(top[1]||''), (top[2]||'')+(top[0]||''), digTop ]).filter(function(b){ return b.length===4; });
+    return {
+      k:'final', nombre:'Pronóstico final (destilado)',
+      explica:'Cada método vota por sus chances; ganan los 5 que más métodos repiten. Los billetes unen los dos chances más votados y los 4 dígitos con más votos. El azar puro no vota. Si los métodos no coinciden, el ranking se decide casi al azar.',
+      chances: top, billetes: billetes,
+      ranking: rank.slice(0,10).map(function(c){ return {c:c, v:votos[c], f:fuentes[c]}; }),
+      pesosTxt: pesos.length ? 'Pesos según su récord en Seguimiento: '+pesos.join(', ')+'.' : ''
+    };
+  }
+
   $('fProx').addEventListener('change', renderPronostico);
-  $('metodos').addEventListener('click', function(e){
+  $('final').addEventListener('click', guardarClick);
+  $('metodos').addEventListener('click', guardarClick);
+  function guardarClick(e){
     var b=e.target.closest('[data-guardar]'); if(!b) return;
     var m=cacheMetodos[+b.dataset.guardar], d=porId(baseId)||ordenados()[0];
     preds = preds.filter(function(p){ return !(p.baseId===d.id && p.k===m.k); });
     preds.push({ id:'p'+Date.now().toString(36), baseId:d.id, baseFecha:d.fecha, k:m.k, nombre:m.nombre, chances:m.chances.slice(), billetes:m.billetes.slice(), creado:Date.now() });
     guardar(); renderSeguimiento(); toast('Guardado: '+m.nombre);
-  });
+  }
 
   // ---------- Seguimiento ----------
   function siguienteDe(fecha){
     var c = sorteos.filter(function(s){ return s.fecha>fecha; }).sort(function(a,b){ return a.fecha.localeCompare(b.fecha); });
     return c[0]||null;
   }
+  function evaluar(p){
+    var sig = siguienteDe(p.baseFecha); if(!sig) return null;
+    var ch = premios(sig).map(u2), hits=0, detalle=[];
+    p.chances.forEach(function(c){ ch.forEach(function(x,i){ if(c===x){ hits++; detalle.push(c+' ('+(i+1)+'º)'); } }); });
+    return { sig:sig, ch:ch, hits:hits, detalle:detalle, bh:p.billetes.filter(function(b){ return premios(sig).indexOf(b)>=0; }) };
+  }
+  function rendimiento(){
+    var agg={};
+    preds.forEach(function(p){
+      var e=evaluar(p); if(!e) return;
+      var a = agg[p.k] || (agg[p.k]={nombre:p.nombre, n:0, apuestas:0, hits:0, esperado:0});
+      a.n++; a.apuestas+=p.chances.length; a.hits+=e.hits; a.esperado+=p.chances.length*e.ch.length/100;
+    });
+    return agg;
+  }
   function renderSeguimiento(){
     if(!preds.length){ $('tablaSeg').innerHTML='<p class="vacio">Guarda pronósticos en la pestaña Pronóstico y, cuando salga el siguiente sorteo, regístralo.</p>'; $('listaPreds').innerHTML=''; return; }
-    var agg={}, lista='<div class="scroll"><table><tr><th>Basado en</th><th>Método</th><th>Chances</th><th>Siguiente sorteo</th><th>Aciertos</th><th></th></tr>';
+    var agg=rendimiento(), lista='<div class="scroll"><table><tr><th>Basado en</th><th>Método</th><th>Chances</th><th>Siguiente sorteo</th><th>Aciertos</th><th></th></tr>';
     preds.slice().sort(function(a,b){ return b.creado-a.creado; }).forEach(function(p){
-      var sig = siguienteDe(p.baseFecha), txtSig='pendiente', ac='—';
-      if(sig){
-        var ch = premios(sig).map(u2), hits=0, detalle=[];
-        p.chances.forEach(function(c){ ch.forEach(function(x,i){ if(c===x){ hits++; detalle.push(c+' ('+(i+1)+'º)'); } }); });
-        var bh = p.billetes.filter(function(b){ return premios(sig).indexOf(b)>=0; });
-        txtSig = fechaTxt(sig.fecha)+': '+ch.join(' · ');
-        ac = hits ? detalle.join(', ') : '0';
-        if(bh.length) ac += ' · ¡billete '+bh.join(', ')+'!';
-        var a = agg[p.k] || (agg[p.k]={nombre:p.nombre, n:0, apuestas:0, hits:0, esperado:0});
-        a.n++; a.apuestas+=p.chances.length; a.hits+=hits; a.esperado+=p.chances.length*ch.length/100;
+      var e = evaluar(p), txtSig='pendiente', ac='—';
+      if(e){
+        txtSig = fechaTxt(e.sig.fecha)+': '+e.ch.join(' · ');
+        ac = e.hits ? e.detalle.join(', ') : '0';
+        if(e.bh.length) ac += ' · ¡billete '+e.bh.join(', ')+'!';
       }
       lista+='<tr><td>'+fechaTxt(p.baseFecha)+'</td><td>'+esc(p.nombre)+'</td><td>'+p.chances.join(' ')+'</td><td>'+esc(txtSig)+'</td><td>'+esc(ac)+'</td><td><button class="btn mini peligro" data-delp="'+p.id+'">✕</button></td></tr>';
     });
